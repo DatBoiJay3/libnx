@@ -17,7 +17,19 @@ typedef struct {
 Result nsInitialize(void);
 void nsExit(void);
 
+Result nsListApplicationRecord(u8 *out, u64 offset);
+Result nsGenerateApplicationRecordCount(u32 *out);
+Result nsDeleteApplicationCompletely(u64 titleID;
+Result nsIsAnyApplicationEntityRedundant(bool *hasRedundancy);
+Result nsDeleteRedundantApplicationEntity();
+Result nsPushApplicationRecord(u64 tid, u64 num, u8 *apprec);
+Result nsIsSystemProgramInstalled(u32 *out, u64 tid);
+Result nsIsGameCardInserted(u8 *out);
+Result nsBeginInstallApplication(u64 tid, u32 unk, u8 storageId);
+Result nsDeleteApplicationRecord(u64 num);
 Result nsGetApplicationControlData(u8 flag, u64 titleID, NsApplicationControlData* buffer, size_t size, size_t* actual_size);
+Result nsCleanupUnrecordedApplicationEntity(Handle hand);
+
 
 /**
  * @brief Returns the total storage capacity (used + free) from content manager services.
