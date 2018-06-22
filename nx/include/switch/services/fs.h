@@ -153,6 +153,7 @@ Result fsOpenSaveDataIterator(FsSaveDataIterator* out, s32 SaveDataSpaceId);
 Result fsOpenDataStorageByCurrentProcess(FsStorage* out);
 Result fsOpenDeviceOperator(FsDeviceOperator* out);
 Result fsOpenSdCardDetectionEventNotifier(FsEventNotifier* out);
+Result fsMountGameCardFileSystem(FsFileSystem* out, u32 gcHand, u32 num);
 // todo: Rest of commands here
 
 /// FsFileSystem can be mounted with fs_dev for use with stdio, see fs_dev.h.
@@ -211,3 +212,6 @@ void fsEventNotifierClose(FsEventNotifier* e);
 // IDeviceOperator
 Result fsDeviceOperatorIsSdCardInserted(FsDeviceOperator* d, bool* out);
 void fsDeviceOperatorClose(FsDeviceOperator* d);
+
+Result fsIsGameCardInserted(FsDeviceOperator* d, bool* out);
+Result fsGetGameCardHandle(FsDeviceOperator* d, u32 *gcHand);
