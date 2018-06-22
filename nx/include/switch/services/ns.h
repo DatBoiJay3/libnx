@@ -19,7 +19,7 @@ void nsExit(void);
 
 Result nsListApplicationRecord(u8 *out, u64 offset);
 Result nsGenerateApplicationRecordCount(u32 *out);
-Result nsDeleteApplicationCompletely(u64 titleID;
+Result nsDeleteApplicationCompletely(u64 titleID);
 Result nsIsAnyApplicationEntityRedundant(bool *hasRedundancy);
 Result nsDeleteRedundantApplicationEntity();
 Result nsPushApplicationRecord(u64 tid, u64 num, u8 *apprec);
