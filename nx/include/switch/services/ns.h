@@ -14,22 +14,30 @@ typedef struct {
     u8 icon[0x20000];//JPEG
 } NsApplicationControlData;
 
+typedef struct{
+	u64 tid;
+	u8 type;
+	u8 unk1;
+	u8 zeroes[6];
+	u8 unk2;
+	u8 zeroes2[7];
+} AppRecord;
+
 Result nsInitialize(void);
 void nsExit(void);
 
-Result nsListApplicationRecord(u8 *out, u64 offset);
-Result nsGenerateApplicationRecordCount(u32 *out);
+Result nsGetApplicationControlData(u8 flag, u64 titleID, NsApplicationControlData* buffer, size_t size, size_t* actual_size);
+Result nsListApplicationRecord(AppRecord *out, u64 offset);
 Result nsDeleteApplicationCompletely(u64 titleID);
+Result nsGenerateApplicationRecordCount(u32 *out);
 Result nsIsAnyApplicationEntityRedundant(bool *hasRedundancy);
+Result nsDeleteApplicationRecord(u64 num);
 Result nsDeleteRedundantApplicationEntity();
-Result nsPushApplicationRecord(u64 tid, u64 num, u8 *apprec);
+Result nsBeginInstallApplication(u64 tid, u32 unk, u8 storageId);
+Result nsCleanupUnrecordedApplicationEntity(Handle hand);
+Result nsPushApplicationRecord(u64 tid, u64 num, AppRecord *apprec);
 Result nsIsSystemProgramInstalled(u32 *out, u64 tid);
 Result nsIsGameCardInserted(u8 *out);
-Result nsBeginInstallApplication(u64 tid, u32 unk, u8 storageId);
-Result nsDeleteApplicationRecord(u64 num);
-Result nsGetApplicationControlData(u8 flag, u64 titleID, NsApplicationControlData* buffer, size_t size, size_t* actual_size);
-Result nsCleanupUnrecordedApplicationEntity(Handle hand);
-
 
 /**
  * @brief Returns the total storage capacity (used + free) from content manager services.
@@ -50,3 +58,10 @@ void nsvmExit(void);
 
 Result nsvmNeedsUpdateVulnerability(bool *out);
 Result nsvmGetSafeSystemVersion(u16 *out);
+
+/* ns:dev */
+Result nsdevInitialize();
+void nsdevExit();
+
+Result nsdevTerminateProcess(u64 pid);
+Result nsdevTerminateProgram(u64 tid);

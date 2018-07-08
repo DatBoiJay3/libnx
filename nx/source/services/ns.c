@@ -6,8 +6,8 @@
 #include "services/sm.h"
 #include "services/ns.h"
 
-static Service g_nsAppManSrv, g_nsGetterSrv, g_nsvmSrv;
-static u64 g_nsRefCnt, g_nsvmRefCnt;
+static Service g_nsAppManSrv, g_nsGetterSrv, g_nsvmSrv, g_nsdevSrv;
+static u64 g_nsRefCnt, g_nsvmRefCnt, g_nsdevRefCnt;
 
 static Result _nsGetInterface(Service* srv_out, u64 cmd_id);
 
@@ -41,6 +41,20 @@ void nsExit(void)
 
         serviceClose(&g_nsGetterSrv);
     }
+}
+
+Result nsdevInitialize() {
+    atomicIncrement64(&g_nsdevRefCnt);
+    
+    if (serviceIsActive(&g_nsdevSrv))
+        return 0;
+    
+    return smGetService(&g_nsdevSrv, "ns:dev");
+}
+
+void nsdevExit() {
+    if (atomicDecrement64(&g_nsdevRefCnt) == 0)
+        serviceClose(&g_nsdevSrv);
 }
 
 static Result _nsGetInterface(Service* srv_out, u64 cmd_id) {
@@ -78,7 +92,46 @@ static Result _nsGetInterface(Service* srv_out, u64 cmd_id) {
     return rc;
 }
 
-Result nsListApplicationRecord(u8 *out, u64 offset) {
+Result nsGetApplicationControlData(u8 flag, u64 titleID, NsApplicationControlData* buffer, size_t size, size_t* actual_size) {
+    IpcCommand c;
+    ipcInitialize(&c);
+    ipcAddRecvBuffer(&c, buffer, size, 0);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+        u8 flag;
+        u64 titleID;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 400;
+    raw->flag = flag;
+    raw->titleID = titleID;
+
+    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+            u64 actual_size;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+
+        if (R_SUCCEEDED(rc) && actual_size) *actual_size = resp->actual_size;
+    }
+
+    return rc;
+}
+
+Result nsListApplicationRecord(AppRecord *out, u64 offset) {
     IpcCommand c;
     ipcInitialize(&c);
 	ipcAddRecvBuffer(&c, out, 0x24, 0);
@@ -104,46 +157,9 @@ Result nsListApplicationRecord(u8 *out, u64 offset) {
         struct {
             u64 magic;
             u64 result;
-			u64 out;
         } *resp = r.Raw;
 
         rc = resp->result;
-		
-		if (R_SUCCEEDED(rc) && out) *out = resp->out;
-    }
-
-    return rc;
-}
-
-Result nsGenerateApplicationRecordCount(u32 *out) {
-    IpcCommand c;
-    ipcInitialize(&c);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-    } *raw;
-
-    raw = ipcPrepareHeader(&c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 1;
-
-    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-        ipcParse(&r);
-
-        struct {
-            u64 magic;
-            u64 result;
-			u64 out;
-        } *resp = r.Raw;
-
-        rc = resp->result;
-		
-		if (R_SUCCEEDED(rc) && out) *out = resp->out;
     }
 
     return rc;
@@ -217,6 +233,73 @@ Result nsIsAnyApplicationEntityRedundant(bool *hasRedundancy) {
     return rc;
 }
 
+Result nsDeleteApplicationRecord(u64 num) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+		u64 num;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 27;
+	raw->num = num;
+
+    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+    }
+
+    return rc;
+}
+
+Result nsGenerateApplicationRecordCount(u32 *out) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 1;
+
+    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+			u64 out;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+		
+		if (R_SUCCEEDED(rc) && out) *out = resp->out;
+    }
+
+    return rc;
+}
+
 Result nsDeleteRedundantApplicationEntity() {
     IpcCommand c;
     ipcInitialize(&c);
@@ -248,7 +331,77 @@ Result nsDeleteRedundantApplicationEntity() {
     return rc;
 }
 
-Result nsPushApplicationRecord(u64 tid, u64 num, u8 *apprec) {
+Result nsBeginInstallApplication(u64 tid, u32 unk, u8 storageId) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+        u32 storageId;
+		u32 unk;
+		u64 tid;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 26;
+	raw->storageId = storageId;
+    raw->unk = unk;
+	raw->tid = tid;
+
+    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+    }
+
+    return rc;
+}
+
+Result nsCleanupUnrecordedApplicationEntity(Handle hand) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+        u64 hand;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 1302;
+	raw->hand = hand;
+
+    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+    }
+
+    return rc;
+}
+
+Result nsPushApplicationRecord(u64 tid, u64 num, AppRecord *apprec) {
     IpcCommand c;
     ipcInitialize(&c);
 	ipcAddSendBuffer(&c, apprec, 0x18, 0);
@@ -354,149 +507,6 @@ Result nsIsGameCardInserted(u8 *out) {
     return rc;
 }
 
-
-Result nsBeginInstallApplication(u64 tid, u32 unk, u8 storageId) {
-    IpcCommand c;
-    ipcInitialize(&c);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u32 storageId;
-		u32 unk;
-		u64 tid;
-    } *raw;
-
-    raw = ipcPrepareHeader(&c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 26;
-	raw->storageId = storageId;
-    raw->unk = unk;
-	raw->tid = tid;
-
-    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-        ipcParse(&r);
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp = r.Raw;
-
-        rc = resp->result;
-    }
-
-    return rc;
-}
-
-Result nsDeleteApplicationRecord(u64 num) {
-    IpcCommand c;
-    ipcInitialize(&c);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-		u64 num;
-    } *raw;
-
-    raw = ipcPrepareHeader(&c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 27;
-	raw->num = num;
-
-    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-        ipcParse(&r);
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp = r.Raw;
-
-        rc = resp->result;
-    }
-
-    return rc;
-}
-
-Result nsGetApplicationControlData(u8 flag, u64 titleID, NsApplicationControlData* buffer, size_t size, size_t* actual_size) {
-    IpcCommand c;
-    ipcInitialize(&c);
-    ipcAddRecvBuffer(&c, buffer, size, 0);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u8 flag;
-        u64 titleID;
-    } *raw;
-
-    raw = ipcPrepareHeader(&c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 400;
-    raw->flag = flag;
-    raw->titleID = titleID;
-
-    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-        ipcParse(&r);
-
-        struct {
-            u64 magic;
-            u64 result;
-            u64 actual_size;
-        } *resp = r.Raw;
-
-        rc = resp->result;
-
-        if (R_SUCCEEDED(rc) && actual_size) *actual_size = resp->actual_size;
-    }
-
-    return rc;
-}
-
-Result nsCleanupUnrecordedApplicationEntity(Handle hand) {
-    IpcCommand c;
-    ipcInitialize(&c);
-
-    struct {
-        u64 magic;
-        u64 cmd_id;
-        u64 hand;
-    } *raw;
-
-    raw = ipcPrepareHeader(&c, sizeof(*raw));
-
-    raw->magic = SFCI_MAGIC;
-    raw->cmd_id = 1302;
-	raw->hand = hand;
-
-    Result rc = serviceIpcDispatch(&g_nsAppManSrv);
-
-    if (R_SUCCEEDED(rc)) {
-        IpcParsedCommand r;
-        ipcParse(&r);
-
-        struct {
-            u64 magic;
-            u64 result;
-        } *resp = r.Raw;
-
-        rc = resp->result;
-    }
-
-    return rc;
-}
-
 Result nsGetTotalSpaceSize(FsStorageId storage_id, u64 *size)
 {
     IpcCommand c;
@@ -527,6 +537,9 @@ Result nsGetTotalSpaceSize(FsStorageId storage_id, u64 *size)
         } *resp = r.Raw;
 
         rc = resp->result;
+
+
+
 
         if (R_SUCCEEDED(rc) && size) *size = resp->size;
     }
@@ -666,6 +679,72 @@ Result nsvmGetSafeSystemVersion(u16 *out)
         rc = resp->result;
 
         if (R_SUCCEEDED(rc) && out) *out = resp->out;
+    }
+
+    return rc;
+}
+
+Result nsdevTerminateProcess(u64 pid) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+        u64 pid;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 1;
+    raw->pid = pid;
+
+    Result rc = serviceIpcDispatch(&g_nsdevSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+        } *resp = r.Raw;
+
+        rc = resp->result;
+    }
+
+    return rc;
+}
+
+Result nsdevTerminateProgram(u64 tid) {
+    IpcCommand c;
+    ipcInitialize(&c);
+
+    struct {
+        u64 magic;
+        u64 cmd_id;
+        u64 tid;
+    } *raw;
+
+    raw = ipcPrepareHeader(&c, sizeof(*raw));
+
+    raw->magic = SFCI_MAGIC;
+    raw->cmd_id = 2;
+    raw->tid = tid;
+
+    Result rc = serviceIpcDispatch(&g_nsdevSrv);
+
+    if (R_SUCCEEDED(rc)) {
+        IpcParsedCommand r;
+        ipcParse(&r);
+
+        struct {
+            u64 magic;
+            u64 result;
+        } *resp = r.Raw;
+
+        rc = resp->result;
     }
 
     return rc;

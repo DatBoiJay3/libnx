@@ -336,6 +336,7 @@ Result fsMountGameCardFileSystem(FsFileSystem* out, u32 gcHand, u32 num) {
     return rc;
 }
 
+
 Result fsOpenSdCardDetectionEventNotifier(FsEventNotifier* out) {
     IpcCommand c;
     ipcInitialize(&c);

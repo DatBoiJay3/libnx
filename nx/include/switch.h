@@ -25,6 +25,7 @@ extern "C" {
 #include "switch/kernel/rwlock.h"
 #include "switch/kernel/condvar.h"
 #include "switch/kernel/thread.h"
+#include "switch/kernel/semaphore.h"
 #include "switch/kernel/virtmem.h"
 #include "switch/kernel/detect.h"
 #include "switch/kernel/random.h"
@@ -58,6 +59,7 @@ extern "C" {
 #include "switch/services/set.h"
 #include "switch/services/lr.h"
 #include "switch/services/spl.h"
+#include "switch/services/es.h"
 
 #include "switch/gfx/gfx.h"
 #include "switch/gfx/binder.h"
